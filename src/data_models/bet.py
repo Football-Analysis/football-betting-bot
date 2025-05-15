@@ -8,6 +8,7 @@ class Bet:
     home_team: int
     bet_on: int
     odds: float
+    back: bool
     amount: float
 
     @staticmethod

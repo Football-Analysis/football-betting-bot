@@ -42,7 +42,7 @@ class MongoFootballClient:
             return None
         return prediction
 
-    def make_bet(self, date, home_team, team_to_bet, price, size, team_name):
+    def make_bet(self, date, home_team, team_to_bet, price, size, team_name, back):
         bet_already_placed = self.bet_collection.find_one({"date": date, "home_team": home_team})
 
         if bet_already_placed is not None:
@@ -52,5 +52,6 @@ class MongoFootballClient:
                       home_team=home_team,
                       bet_on=team_to_bet,
                       odds=price,
+                      back=back,
                       amount=size)
             self.bet_collection.insert_one(bet.__dict__)

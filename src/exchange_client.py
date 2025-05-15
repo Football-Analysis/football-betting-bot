@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 from .data_models.event import Event
 from .data_models.runner import Runner
 from .data_models.market import Market
+from .data_models.prediction import Prediction
 from .config import Config as conf
 
 class BetfairClient:
@@ -54,8 +55,10 @@ class BetfairClient:
             for market_runner in market.runners:
                 if runner.selection_id == market_runner.selection_id:
                     try:
-                        market_runner.price = runner.ex.available_to_back[0].price
-                        market_runner.size = runner.ex.available_to_back[0].size
+                        market_runner.back_price = runner.ex.available_to_back[0].price
+                        market_runner.back_size = runner.ex.available_to_back[0].size
+                        market_runner.lay_price = runner.ex.available_to_lay[0].price
+                        market_runner.lay_size = runner.ex.available_to_lay[0].size
                     except:
                         return None
         return market
@@ -97,7 +100,6 @@ class BetfairClient:
             return None, None
         try:
             for runner in markets[0].runners:
-                #print(runner)
                 runner_name: str = runner.runner_name
                 runner_id: int = runner.selection_id
                 date = datetime.strftime(event.date,"%Y-%m-%dT%H:%M:%S+00:00")
@@ -132,6 +134,8 @@ class BetfairClient:
                                   is_home,
                                   is_away,
                                   is_draw,
+                                  0.0,
+                                  0.0,
                                   0.0,
                                   0.0))
         except Exception as e:
@@ -183,45 +187,135 @@ class BetfairClient:
         if prediction is None:
             print(f"Cannot find prediction for {market.event_name}")
         else:
-            diffs = []
             price = 0
             team = ""
-            for runner in market.runners:
-                try:
-                    if runner.db_id == home_team:
-                        diffs.append(prediction.home_win - (1/runner.price))
-                        if 0.3 < prediction.home_win - (1/runner.price):
-                            price = runner.price
-                            team = runner.name
-                            team_id = runner.db_id
-                    elif runner.db_id == away_team:
-                        diffs.append(prediction.away_win - (1/runner.price))
-                        if 0.3 < prediction.away_win - (1/runner.price):
-                            price = runner.price
-                            team=runner.name
-                            team_id = runner.db_id
-                    elif runner.db_id == draw:
-                        diffs.append(prediction.draw - (1/runner.price))
-                        if 0.3 < prediction.draw - (1/runner.price):
-                            price = runner.price
-                            team = runner.name
-                            team_id = runner.db_id
-                    else:
-                        raise RuntimeError(f"Team {runner.name} isnt home, away or draw, they must be one of these")
-                except:
-                    print(market.event_name)
-                    print(market.runners)
-                    raise RuntimeError("uh oh")
-            max_diff = max(diffs)
-            if 0.3 < max_diff:
-                print(f"Found bet opportunity for {market.event_name} with diff {max_diff} - {team} at {price}")
-                self.bet_on_game(market.event_date, home_team, team_id, price, 1.0, team)
+            back_bet, back_diff, back_team_id, back_team_name, back_price = self.check_odds(market.runners, prediction, home_team, away_team, draw, "back")
+            lay_bet, lay_diff, lay_team_id, lay_team_name, lay_price = self.check_odds(market.runners, prediction, home_team, away_team, draw, "lay")
+
+            if back_bet and lay_bet:
+                bet = True
+                if back_diff > abs(lay_diff):
+                    max_diff = back_diff
+                    team_id = back_team_id
+                    team_name = back_team_name
+                    price = back_price
+                    back = True
+                else:
+                    max_diff = lay_diff
+                    team_id = lay_team_id
+                    team_name = lay_team_name
+                    price = lay_price
+                    back = False
+            elif back_bet:
+                bet=True
+                max_diff = back_diff
+                team_id = back_team_id
+                team_name = back_team_name
+                price = back_price
+                back = True
+            elif lay_bet:
+                bet = True
+                max_diff = lay_diff
+                team_id = lay_team_id
+                team_name = lay_team_name
+                price = lay_price
+                back = False
+            else:
+                bet = False
+
+            if bet:
+                if back:
+                    print(f"Found bet opportunity for {market.event_name} with diff {max_diff} - backing {team_name} at {price}")
+                else:
+                    print(f"Found bet opportunity for {market.event_name} with diff {max_diff} - laying {team_name} at {price}, back odds equivalent: {1+(1/(price-1))}")
+                    price = 1+(1/(price-1))
+                self.bet_on_game(market.event_date, home_team, team_id, price, 1.0, team, back)
             else:
                 pass
-                #print(f"No edge {market.event_name}, max diff was only {max_diff}")
-                
-    def bet_on_game(self, date, home_team, team_to_bet, price, size, team_name):
-        self.mfc.make_bet(date, home_team, team_to_bet, price, size, team_name)
+
+    def check_odds(self, runners: List[Runner], prediction: Prediction, home_team, away_team, draw, method):
+        diffs = []
+        max_diff = 0
+        for runner in runners:
+            if method == "back":
+                runner_price = runner.back_price
+                back = True
+            elif method == "lay":
+                runner_price = runner.lay_price
+                back = False
+            else:
+                raise RuntimeError(f"You must be finding back or lay odds, {method} is not supported")
+
+            try:
+                if runner.db_id == home_team:
+                    diff = prediction.home_win - (1/runner_price)
+                    diffs.append(diff)
+                    if back:
+                        if diff > max_diff:
+                            max_diff = diff
+                            if 0.3 < diff:
+                                price = runner_price
+                                team = runner.name
+                                team_id = runner.db_id
+                    else:
+                        if diff < max_diff:
+                            max_diff = diff
+                            if -0.3 > diff:
+                                price = runner_price
+                                team = runner.name
+                                team_id = runner.db_id
+                elif runner.db_id == away_team:
+                    diff = prediction.away_win - (1/runner_price)
+                    diffs.append(diff)
+                    if back:
+                        if diff > max_diff:
+                            max_diff = diff
+                            if 0.3 < diff:
+                                price = runner_price
+                                team = runner.name
+                                team_id = runner.db_id
+                    else:
+                        if diff < max_diff:
+                            max_diff = diff
+                            if -0.3 > diff:
+                                price = runner_price
+                                team = runner.name
+                                team_id = runner.db_id
+                elif runner.db_id == draw:
+                    diff = prediction.draw - (1/runner_price)
+                    diffs.append(diff)
+                    if back:
+                        if diff > max_diff:
+                            max_diff = diff
+                            if 0.3 < diff:
+                                price = runner_price
+                                team = runner.name
+                                team_id = runner.db_id
+                    else:
+                        if diff < max_diff:
+                            max_diff = diff
+                            if -0.3 > diff:
+                                price = runner_price
+                                team = runner.name
+                                team_id = runner.db_id
+                else:
+                    raise RuntimeError(f"Team {runner.name} isnt home, away or draw, they must be one of these")
+            except:
+                raise RuntimeError("uh oh")
+
+            if back:
+                if max_diff > 0.3:
+                    return True, max_diff, team_id, team, price
+                else:
+                    return False, None, None, None, None
+            else:
+                if max_diff < -0.3:
+                    return True, max_diff, team_id, team, price
+                else:
+                    return False, None, None, None, None
+
+    def bet_on_game(self, date, home_team, team_to_bet, price, size, team_name, back):
+        self.mfc.make_bet(date, home_team, team_to_bet, price, size, team_name, back)
 
     def get_and_check_odds(self):
         events = self.get_events()
