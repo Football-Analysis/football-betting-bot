@@ -10,8 +10,10 @@ class Runner:
     home: bool
     away: bool
     draw: bool
-    price: Optional[float]
-    size: Optional[float]
+    back_price: Optional[float]
+    back_size: Optional[float]
+    lay_price: Optional[float]
+    lay_size: Optional[float]
 
     @staticmethod
     def from_mongo_doc(mongo_doc: dict) -> "Runner":
