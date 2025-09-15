@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "disable_existing_loggers": false,
+  "formatters": {
+    "default": {
+      "format": "%(asctime)s %(levelname)s %(name)s - %(message)s"
+    }
+  },
+  "handlers": {
+    "console": {
+      "class": "logging.StreamHandler",
+      "stream": "ext://sys.stdout",
+      "formatter": "default"
+    }
+  },
+  "root": {
+    "level": "WARNING"
+  },
+  "loggers": {
+    "post_and_in": {
+      "level": "INFO",
+      "handlers": ["console"],
+      "propagate": false
+    },
+    "pymongo": {
+      "level": "WARNING"
+    },
+    "urllib3": {
+      "level": "WARNING"
+    },
+    "uvicorn": {
+      "level": "INFO"
+    },
+    "uvicorn.error": {
+      "level": "INFO"
+    },
+    "uvicorn.access": {
+      "level": "WARNING"
+    }
+  }
+}

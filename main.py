@@ -1,19 +1,27 @@
 from src.exchange_client import BetfairClient
 from time import sleep
 from datetime import datetime
+from logging import getLogger
+from src.logging_setup import setup_logging, get_logger
 
+
+setup_logging()
+log = get_logger("main")
+log.info("Initialising the Betfair Client")
 bc = BetfairClient()
 
 while True:
-    print(f"Running analysis for all events at {datetime.now()}")
+    log.info(f"Running analysis for all events")
     total = 0
     events = bc.get_events()
     no_id = 0
     no_pred = 0
     no_idea=0
     id_prob = 0
-    print(f"Found {len(events)} events")
+    log.info(f"Found {len(events)} events")
     for event in events:
+        if event is None:
+            continue
         market, problem = bc.get_market_catalogue(event)
         if market is not None:
             total += 1
@@ -27,8 +35,8 @@ while True:
                 id_prob += 1
             else:
                 no_idea +=1
-    print(f"Found predictions for {total} events")
-    print(f"Found predictions for {(total/len(events))*100}% of events")
-    print(f"no pred total {no_pred}")
-    print(f"ID problem {id_prob}")
-    print(f"Unknown error {no_idea}")
+    log.debug(f"Found predictions for {total} events")
+    log.info(f"Found predictions for {(total/len(events))*100}% of events")
+    log.debug(f"no pred total {no_pred}")
+    log.debug(f"ID problem {id_prob}")
+    log.debug(f"Unknown error {no_idea}")

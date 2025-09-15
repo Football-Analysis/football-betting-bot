@@ -5,10 +5,11 @@ from typing import List
 
 @dataclass
 class Market:
-    market_id: int
+    market_id: float
     event_id: int
     event_name: str
     event_date: str
+    total_matched: float
     runners: List[Runner]
 
     @staticmethod
